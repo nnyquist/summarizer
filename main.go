@@ -17,16 +17,8 @@ import (
 type ColumnInfo struct {
 	Position, MaxLen, MinLen int
 	AggregateLen             float64
-	IsNumeric, IsDate        int
-}
-
-// Wrapper for map to replace default 0 with 99
-func minWrapper(x int) int {
-	if x == 0 {
-		return 99
-	} else {
-		return x
-	}
+	IsNumeric, IsDate        uint
+	TotalNumeric             float64
 }
 
 func main() {
@@ -83,8 +75,8 @@ func main() {
 			i++
 			continue
 		}
-		for i, val := range record {
-			k := colNames[i]
+		for j, val := range record {
+			k := colNames[j]
 			columnData := columnMap[k]
 			colLen := len(val)
 
@@ -92,17 +84,18 @@ func main() {
 				columnData.MaxLen = colLen
 			}
 
-			if colLen < minWrapper(columnData.MinLen) {
+			if i == 2 || colLen < columnData.MinLen {
 				columnData.MinLen = colLen
 			}
 
 			columnData.AggregateLen += float64(colLen)
 
-			_, err := strconv.ParseFloat(val, 64)
+			floatVal, err := strconv.ParseFloat(val, 64)
 			if err != nil {
 				columnData.IsNumeric += 0
 			} else {
 				columnData.IsNumeric += 1
+				columnData.TotalNumeric += floatVal
 			}
 
 			_, err = time.Parse(dateFormat, val)
@@ -114,6 +107,7 @@ func main() {
 
 			columnMap[k] = columnData
 		}
+		i++
 	}
 
 	for i, k := range colNames {
@@ -128,7 +122,7 @@ func main() {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.AppendHeader(table.Row{"#", "Column Name", "Max Len", "Min Len", "Avg Len",
-		"% Numeric", "% Date"})
+		"% Numeric", "Numeric Total", "% Date"})
 	for _, k := range colNames {
 		v := columnMap[k]
 		pos := &v.Position
@@ -139,7 +133,8 @@ func main() {
 			(float64(v.IsNumeric)/float64(totalRecords))*100)
 		isD := fmt.Sprintf("%.f%%",
 			(float64(v.IsDate)/float64(totalRecords))*100)
-		t.AppendRow([]interface{}{*pos, k, *max, *min, avg, isN, isD})
+		numericTotal := fmt.Sprintf("%.2f", v.TotalNumeric)
+		t.AppendRow([]interface{}{*pos, k, *max, *min, avg, isN, numericTotal, isD})
 	}
 	t.Render()
 }
